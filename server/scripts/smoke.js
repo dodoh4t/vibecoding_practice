@@ -48,7 +48,7 @@ async function main() {
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const firstEmail = `smoke-${suffix}@example.com`;
   const secondEmail = `smoke-other-${suffix}@example.com`;
-  const password = 'securepass123';
+  const password = 'BetterPass123!';
 
   try {
     await requestJson(baseUrl, '/health');
@@ -113,6 +113,14 @@ async function main() {
       method: 'POST',
       headers: { Authorization: `Bearer ${firstToken}` }
     });
+
+    const afterLogout = await fetch(`${baseUrl}/todos`, {
+      headers: { Authorization: `Bearer ${firstToken}` }
+    });
+
+    if (afterLogout.status !== 401) {
+      throw new Error(`Expected logged-out token to return 401, got ${afterLogout.status}.`);
+    }
 
     console.log('Smoke test passed.');
   } finally {

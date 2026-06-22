@@ -17,6 +17,8 @@ Required environment variables:
 - `JWT_SECRET`: long random signing secret
 - `JWT_EXPIRES_IN`: JWT lifetime, for example `1h`
 - `CLIENT_ORIGIN`: frontend origin for CORS
+- `AUTH_RATE_LIMIT_WINDOW_MS`: authentication rate-limit window in milliseconds
+- `AUTH_RATE_LIMIT_MAX`: maximum signup/login attempts per window
 - `PORT`: local API port
 
 ## API
@@ -33,3 +35,5 @@ All application routes are mounted under `/api`.
 - `DELETE /api/todos/:todoId`
 
 The live Supabase schema uses `BIGSERIAL` IDs, so API IDs are returned as strings but validated as positive integer strings.
+
+Logout revokes the current JWT by storing its `jti` in `private.revoked_tokens` until the token expires.

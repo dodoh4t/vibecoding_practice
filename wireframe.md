@@ -101,7 +101,7 @@ LoginPage
 │  ┌──────────────────────────────────┐  │
 │  │ at least 8 characters            │  │
 │  └──────────────────────────────────┘  │
-│  Password must be at least 8 chars.    │
+│  Password must meet the policy.        │
 │                                        │
 │  ┌──────────────────────────────────┐  │
 │  │          Create account          │  │
@@ -118,7 +118,7 @@ LoginPage
 - `POST /auth/signup`
   - requestBody: `{ email, password }`
   - success: `201`, `user`
-  - error: `400 VALIDATION_ERROR`, `409 EMAIL_ALREADY_EXISTS`, `500 INTERNAL_SERVER_ERROR`
+  - error: `400 VALIDATION_ERROR`, `429 RATE_LIMITED`, `500 INTERNAL_SERVER_ERROR`
 
 ### 컴포넌트 트리
 
@@ -141,7 +141,7 @@ SignupPage
 1. 사용자가 이메일과 비밀번호를 입력한다.
 2. 클라이언트에서 이메일 형식과 8자 이상 비밀번호를 검증한다.
 3. 검증 성공 시 `POST /auth/signup`을 호출한다.
-4. 성공하면 로그인 화면으로 이동하고 "Account created. Log in with your new account." 메시지를 보여준다.
+4. 성공하면 로그인 화면으로 이동하고 "Account request accepted. Log in to continue." 메시지를 보여준다.
 5. 이미 가입된 이메일이면 `409` 응답 메시지를 폼 하단에 표시한다.
 6. 이메일은 백엔드 정책과 맞게 소문자 정규화 대상임을 전제로 한다.
 

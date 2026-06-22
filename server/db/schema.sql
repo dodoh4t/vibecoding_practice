@@ -10,6 +10,10 @@ CREATE TABLE IF NOT EXISTS public.users (
         CHECK (email = lower(email))
 );
 
+CREATE SCHEMA IF NOT EXISTS private;
+
+REVOKE ALL ON SCHEMA private FROM anon, authenticated;
+
 CREATE TABLE IF NOT EXISTS public.todos (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL,
@@ -26,6 +30,20 @@ CREATE TABLE IF NOT EXISTS public.todos (
         CHECK (length(btrim(content)) > 0)
 );
 
+CREATE TABLE IF NOT EXISTS private.revoked_tokens (
+    id BIGSERIAL PRIMARY KEY,
+    token_jti TEXT NOT NULL,
+    user_id BIGINT NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT revoked_tokens_user_id_fkey
+        FOREIGN KEY (user_id)
+        REFERENCES public.users(id)
+        ON DELETE CASCADE,
+    CONSTRAINT revoked_tokens_token_jti_not_blank_chk
+        CHECK (length(btrim(token_jti)) > 0)
+);
+
 CREATE UNIQUE INDEX IF NOT EXISTS users_email_unique_idx
     ON public.users (email);
 
@@ -40,3 +58,15 @@ CREATE INDEX IF NOT EXISTS todos_user_id_due_date_idx
 
 CREATE INDEX IF NOT EXISTS todos_created_at_idx
     ON public.todos (created_at DESC);
+
+CREATE UNIQUE INDEX IF NOT EXISTS revoked_tokens_token_jti_unique_idx
+    ON private.revoked_tokens (token_jti);
+
+CREATE INDEX IF NOT EXISTS revoked_tokens_user_id_idx
+    ON private.revoked_tokens (user_id);
+
+CREATE INDEX IF NOT EXISTS revoked_tokens_expires_at_idx
+    ON private.revoked_tokens (expires_at);
+
+REVOKE ALL ON ALL TABLES IN SCHEMA private FROM anon, authenticated;
+REVOKE ALL ON ALL SEQUENCES IN SCHEMA private FROM anon, authenticated;

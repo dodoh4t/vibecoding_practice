@@ -11,9 +11,12 @@ const config = {
   jwtSecret: 'test-secret-with-enough-length',
   jwtExpiresIn: '1h',
   clientOrigin: 'http://localhost:5173',
+  authRateLimitWindowMs: 60000,
+  authRateLimitMax: 0,
   port: 3000,
   nodeEnv: 'test'
 };
+const TEST_PASSWORD = 'BetterPass123!';
 
 process.env.DATABASE_URL = config.databaseUrl;
 process.env.JWT_SECRET = config.jwtSecret;
@@ -35,6 +38,7 @@ function installMockDb() {
   const state = {
     users: [],
     todos: [],
+    revokedTokens: [],
     nextUserId: 1,
     nextTodoId: 1
   };
@@ -68,6 +72,29 @@ function installMockDb() {
       const [id] = params;
       const user = state.users.find((item) => String(item.id) === String(id));
       return { rows: user ? [user] : [], rowCount: user ? 1 : 0 };
+    }
+
+    if (normalized.startsWith('INSERT INTO private.revoked_tokens')) {
+      const [tokenJti, userId, expiresAt] = params;
+      if (!state.revokedTokens.some((item) => item.token_jti === tokenJti)) {
+        state.revokedTokens.push({
+          token_jti: tokenJti,
+          user_id: userId,
+          expires_at: expiresAt
+        });
+      }
+      return { rows: [], rowCount: 1 };
+    }
+
+    if (normalized.startsWith('SELECT 1 FROM private.revoked_tokens')) {
+      const [tokenJti] = params;
+      const revoked = state.revokedTokens.find((item) => item.token_jti === tokenJti);
+      return { rows: revoked ? [{ '?column?': 1 }] : [], rowCount: revoked ? 1 : 0 };
+    }
+
+    if (normalized.startsWith('DELETE FROM private.revoked_tokens')) {
+      state.revokedTokens = [];
+      return { rows: [], rowCount: 1 };
     }
 
     if (normalized.startsWith('INSERT INTO public.todos')) {
@@ -134,12 +161,12 @@ function installMockDb() {
 async function signupAndLogin(app, email = 'user@example.com') {
   await request(app)
     .post('/api/auth/signup')
-    .send({ email, password: 'securepass123' })
+    .send({ email, password: TEST_PASSWORD })
     .expect(201);
 
   const loginResponse = await request(app)
     .post('/api/auth/login')
-    .send({ email, password: 'securepass123' })
+    .send({ email, password: TEST_PASSWORD })
     .expect(200);
 
   return loginResponse.body.accessToken;
@@ -150,6 +177,10 @@ test('health endpoint returns ok', async () => {
 
   const response = await request(app).get('/api/health').expect(200);
   assert.deepEqual(response.body, { status: 'ok' });
+  assert.equal(response.headers['x-powered-by'], undefined);
+  assert.equal(response.headers['x-content-type-options'], 'nosniff');
+  assert.equal(response.headers['x-frame-options'], 'SAMEORIGIN');
+  assert.match(response.headers['content-security-policy'], /default-src 'self'/);
 });
 
 test('OpenAPI docs are served', async () => {
@@ -170,29 +201,50 @@ test('PostgreSQL DATE values are parsed without timezone conversion', () => {
 });
 
 test('signup normalizes email and rejects duplicate accounts', async () => {
-  installMockDb();
+  const state = installMockDb();
   const app = createApp({ config });
 
   const response = await request(app)
     .post('/api/auth/signup')
-    .send({ email: 'USER@Example.com', password: 'securepass123' })
+    .send({ email: 'USER@Example.com', password: TEST_PASSWORD })
     .expect(201);
 
-  assert.equal(response.body.user.email, 'user@example.com');
+  assert.equal(response.body.message, 'If the account can be created, continue to login.');
+  assert.equal(state.users[0].email, 'user@example.com');
 
   const duplicate = await request(app)
     .post('/api/auth/signup')
-    .send({ email: 'user@example.com', password: 'securepass123' })
-    .expect(409);
+    .send({ email: 'user@example.com', password: TEST_PASSWORD })
+    .expect(201);
 
-  assert.equal(duplicate.body.error.code, 'EMAIL_ALREADY_EXISTS');
+  assert.equal(duplicate.body.message, response.body.message);
+  assert.equal(state.users.length, 1);
+});
+
+test('signup rejects weak or common passwords', async () => {
+  installMockDb();
+  const app = createApp({ config });
+
+  const weak = await request(app)
+    .post('/api/auth/signup')
+    .send({ email: 'weak@example.com', password: '12345678' })
+    .expect(400);
+
+  assert.equal(weak.body.error.code, 'VALIDATION_ERROR');
+
+  const common = await request(app)
+    .post('/api/auth/signup')
+    .send({ email: 'common@example.com', password: 'Password123!' })
+    .expect(400);
+
+  assert.equal(common.body.error.code, 'VALIDATION_ERROR');
 });
 
 test('login returns a bearer token and rejects bad credentials', async () => {
   installMockDb();
   const app = createApp({ config });
 
-  const passwordHash = await bcrypt.hash('securepass123', 4);
+  const passwordHash = await bcrypt.hash(TEST_PASSWORD, 4);
   await db.query('INSERT INTO public.users (email, password_hash) VALUES ($1, $2)', [
     'user@example.com',
     passwordHash
@@ -200,7 +252,7 @@ test('login returns a bearer token and rejects bad credentials', async () => {
 
   const response = await request(app)
     .post('/api/auth/login')
-    .send({ email: 'user@example.com', password: 'securepass123' })
+    .send({ email: 'user@example.com', password: TEST_PASSWORD })
     .expect(200);
 
   assert.equal(response.body.tokenType, 'Bearer');
@@ -213,6 +265,33 @@ test('login returns a bearer token and rejects bad credentials', async () => {
     .expect(401);
 
   assert.equal(invalid.body.error.code, 'INVALID_CREDENTIALS');
+});
+
+test('auth endpoints are rate limited when configured', async () => {
+  installMockDb();
+  const app = createApp({
+    config: {
+      ...config,
+      authRateLimitMax: 2
+    }
+  });
+
+  await request(app)
+    .post('/api/auth/login')
+    .send({ email: 'missing@example.com', password: 'wrong' })
+    .expect(401);
+
+  await request(app)
+    .post('/api/auth/login')
+    .send({ email: 'missing@example.com', password: 'wrong' })
+    .expect(401);
+
+  const limited = await request(app)
+    .post('/api/auth/login')
+    .send({ email: 'missing@example.com', password: 'wrong' })
+    .expect(429);
+
+  assert.equal(limited.body.error.code, 'RATE_LIMITED');
 });
 
 test('todo APIs require auth and enforce owner-scoped updates', async () => {
@@ -263,6 +342,16 @@ test('todo APIs require auth and enforce owner-scoped updates', async () => {
     .delete(`/api/todos/${createResponse.body.todo.id}`)
     .set('Authorization', `Bearer ${firstToken}`)
     .expect(204);
+
+  await request(app)
+    .post('/api/auth/logout')
+    .set('Authorization', `Bearer ${firstToken}`)
+    .expect(204);
+
+  await request(app)
+    .get('/api/todos')
+    .set('Authorization', `Bearer ${firstToken}`)
+    .expect(401);
 });
 
 test('todo validation returns API error format', async () => {

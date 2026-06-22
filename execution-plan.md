@@ -106,7 +106,7 @@
 - [ ] `api-spec.yaml`의 응답 형식을 맞춘다.
   - [ ] 성공 응답 필드는 camelCase로 반환
   - [ ] 에러 응답은 `{ error: { code, message } }` 형식으로 통일
-  - [ ] `VALIDATION_ERROR`, `EMAIL_ALREADY_EXISTS`, `INVALID_CREDENTIALS`, `UNAUTHORIZED`, `TOKEN_EXPIRED`, `TODO_NOT_FOUND`, `INTERNAL_SERVER_ERROR` 코드 사용
+  - [ ] `VALIDATION_ERROR`, `INVALID_CREDENTIALS`, `UNAUTHORIZED`, `TOKEN_EXPIRED`, `RATE_LIMITED`, `TODO_NOT_FOUND`, `INTERNAL_SERVER_ERROR` 코드 사용
 - [ ] CORS를 설정한다.
   - [ ] 로컬 프론트엔드 origin 허용
   - [ ] 배포 환경에서는 `CLIENT_ORIGIN` 기준으로 허용

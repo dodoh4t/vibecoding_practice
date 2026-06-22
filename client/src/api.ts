@@ -51,7 +51,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
 export const api = {
   signup(payload: { email: string; password: string }) {
-    return request<{ user: User }>('/auth/signup', {
+    return request<{ message: string }>('/auth/signup', {
       method: 'POST',
       body: payload,
     });

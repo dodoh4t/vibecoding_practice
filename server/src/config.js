@@ -1,5 +1,7 @@
 const DEFAULT_JWT_EXPIRES_IN = '1h';
 const DEFAULT_PORT = 3000;
+const DEFAULT_AUTH_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+const DEFAULT_AUTH_RATE_LIMIT_MAX = 10;
 
 function getConfig(env = process.env) {
   return {
@@ -7,6 +9,8 @@ function getConfig(env = process.env) {
     jwtSecret: env.JWT_SECRET,
     jwtExpiresIn: env.JWT_EXPIRES_IN || DEFAULT_JWT_EXPIRES_IN,
     clientOrigin: env.CLIENT_ORIGIN || 'http://localhost:5173',
+    authRateLimitWindowMs: Number(env.AUTH_RATE_LIMIT_WINDOW_MS || DEFAULT_AUTH_RATE_LIMIT_WINDOW_MS),
+    authRateLimitMax: Number(env.AUTH_RATE_LIMIT_MAX || DEFAULT_AUTH_RATE_LIMIT_MAX),
     port: Number(env.PORT || DEFAULT_PORT),
     nodeEnv: env.NODE_ENV || 'development'
   };

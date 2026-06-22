@@ -27,6 +27,16 @@ import { useAuth } from './auth-context';
 import { ApiError, type Todo } from './types';
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const passwordPolicyMessage = 'Password must be at least 12 characters and include uppercase, lowercase, number, and symbol.';
+
+function isStrongPassword(password: string) {
+  return password.length >= 12
+    && /[a-z]/.test(password)
+    && /[A-Z]/.test(password)
+    && /\d/.test(password)
+    && /[^A-Za-z0-9]/.test(password)
+    && !['12345678', '123456789', 'password123', 'Password123!'].includes(password);
+}
 
 function isAuthError(error: unknown) {
   return error instanceof ApiError && ['UNAUTHORIZED', 'TOKEN_EXPIRED'].includes(error.code);
@@ -262,8 +272,8 @@ function SignupPage() {
       setError('Enter a valid email address.');
       return;
     }
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters.');
+    if (!isStrongPassword(password)) {
+      setError(passwordPolicyMessage);
       return;
     }
 
@@ -272,7 +282,7 @@ function SignupPage() {
       await api.signup({ email: normalizedEmail, password });
       navigate('/login', {
         replace: true,
-        state: { message: 'Account created. Log in with your new account.' },
+        state: { message: 'Account request accepted. Log in to continue.' },
       });
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Unable to create account.');
@@ -310,9 +320,9 @@ function SignupPage() {
             autoComplete="new-password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
-            placeholder="At least 8 characters"
+            placeholder="At least 12 characters"
           />
-          <p className="mt-2 text-sm font-medium text-ink-500">Use 8 or more characters.</p>
+          <p className="mt-2 text-sm font-medium text-ink-500">{passwordPolicyMessage}</p>
         </div>
         <button className="primary-button w-full" type="submit" disabled={isSubmitting}>
           {isSubmitting ? 'Creating...' : 'Create account'}

@@ -11,7 +11,27 @@ function isValidEmail(email) {
 }
 
 function isValidPassword(password) {
-  return typeof password === 'string' && password.length >= 8;
+  if (typeof password !== 'string' || password.length < 12) {
+    return false;
+  }
+
+  return /[a-z]/.test(password)
+    && /[A-Z]/.test(password)
+    && /\d/.test(password)
+    && /[^A-Za-z0-9]/.test(password)
+    && !isCommonPassword(password);
+}
+
+function isCommonPassword(password) {
+  return new Set([
+    '12345678',
+    '123456789',
+    'password123',
+    'Password123!',
+    'qwerty123',
+    'admin123456',
+    'letmein123'
+  ]).has(password);
 }
 
 function isPositiveIntegerId(value) {

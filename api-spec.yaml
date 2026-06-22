@@ -25,8 +25,9 @@ paths:
         - Auth
       summary: Create a new user account
       description: >
-        Creates a user account with a unique lowercase email and hashed password.
-        The password is accepted as plaintext only in the request and must never be stored as plaintext.
+        Accepts a signup request with a lowercase email and hashed password.
+        The same success response is returned for new and existing emails to avoid
+        account enumeration.
       security: []
       requestBody:
         required: true
@@ -39,23 +40,19 @@ paths:
                 summary: Valid signup request
                 value:
                   email: user@example.com
-                  password: securepass123
+                  password: BetterPass123!
       responses:
         '201':
-          description: User account created successfully
+          description: Signup request accepted
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AuthUserResponse'
+                $ref: '#/components/schemas/SignupResponse'
               examples:
-                created:
-                  summary: Created user
+                accepted:
+                  summary: Accepted signup request
                   value:
-                    user:
-                      id: '1'
-                      email: user@example.com
-                      createdAt: '2026-06-22T05:40:00.000Z'
-                      updatedAt: '2026-06-22T05:40:00.000Z'
+                    message: If the account can be created, continue to login.
         '400':
           description: Invalid signup input
           content:
@@ -70,24 +67,13 @@ paths:
                       code: VALIDATION_ERROR
                       message: Enter a valid email address.
                 shortPassword:
-                  summary: Password too short
+                  summary: Weak password
                   value:
                     error:
                       code: VALIDATION_ERROR
-                      message: Password must be at least 8 characters.
-        '409':
-          description: Email is already registered
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-              examples:
-                duplicateEmail:
-                  summary: Duplicate email
-                  value:
-                    error:
-                      code: EMAIL_ALREADY_EXISTS
-                      message: This email is already registered.
+                      message: Password must be at least 12 characters and include uppercase, lowercase, number, and symbol.
+        '429':
+          $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalServerError'
 
@@ -111,7 +97,7 @@ paths:
                 summary: Valid login request
                 value:
                   email: user@example.com
-                  password: securepass123
+                  password: BetterPass123!
       responses:
         '200':
           description: Login successful
@@ -157,6 +143,8 @@ paths:
                     error:
                       code: INVALID_CREDENTIALS
                       message: Email or password is incorrect.
+        '429':
+          $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalServerError'
 
@@ -166,9 +154,8 @@ paths:
         - Auth
       summary: Logout the current user
       description: >
-        Completes the logout flow for a stateless JWT MVP. The server does not
-        revoke a persisted session because the ERD intentionally has no sessions
-        table. The client must remove the stored JWT after this request succeeds.
+        Revokes the current JWT by storing its jti until token expiry. The client
+        must also remove the stored JWT after this request succeeds.
       security:
         - bearerAuth: []
       responses:
@@ -498,6 +485,19 @@ components:
                 error:
                   code: INTERNAL_SERVER_ERROR
                   message: An unexpected error occurred.
+    RateLimited:
+      description: Too many authentication attempts
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            tooManyAttempts:
+              summary: Authentication rate limited
+              value:
+                error:
+                  code: RATE_LIMITED
+                  message: Too many authentication attempts. Try again later.
 
   schemas:
     User:
@@ -598,9 +598,11 @@ components:
         password:
           type: string
           format: password
-          minLength: 8
-          description: Plaintext password sent over HTTPS. It is hashed before storage.
-          example: securepass123
+          minLength: 12
+          description: >
+            Plaintext password sent over HTTPS. It must include uppercase,
+            lowercase, number, and symbol characters and is hashed before storage.
+          example: BetterPass123!
 
     LoginRequest:
       type: object
@@ -618,7 +620,7 @@ components:
           format: password
           minLength: 1
           description: Account password.
-          example: securepass123
+          example: BetterPass123!
 
     CreateTodoRequest:
       type: object
@@ -647,13 +649,14 @@ components:
           description: New completion status.
           example: true
 
-    AuthUserResponse:
+    SignupResponse:
       type: object
       required:
-        - user
+        - message
       properties:
-        user:
-          $ref: '#/components/schemas/User'
+        message:
+          type: string
+          example: If the account can be created, continue to login.
 
     LoginResponse:
       type: object
@@ -713,10 +716,10 @@ components:
               type: string
               enum:
                 - VALIDATION_ERROR
-                - EMAIL_ALREADY_EXISTS
                 - INVALID_CREDENTIALS
                 - UNAUTHORIZED
                 - TOKEN_EXPIRED
+                - RATE_LIMITED
                 - TODO_NOT_FOUND
                 - INTERNAL_SERVER_ERROR
               description: Stable machine-readable error code.

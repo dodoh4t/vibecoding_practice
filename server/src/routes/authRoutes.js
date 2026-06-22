@@ -1,11 +1,13 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const { randomUUID } = require('crypto');
 const asyncHandler = require('../utils/asyncHandler');
 const authenticate = require('../middleware/authenticate');
+const revokedTokensRepository = require('../repositories/revokedTokensRepository');
 const usersRepository = require('../repositories/usersRepository');
 const { getConfig } = require('../config');
-const { AppError, validationError } = require('../errors');
+const { AppError, validationError, unauthorized } = require('../errors');
 const { formatUser } = require('../utils/formatters');
 const { normalizeEmail, isValidEmail, isValidPassword } = require('../utils/validators');
 
@@ -41,21 +43,28 @@ router.post('/signup', asyncHandler(async (req, res) => {
   }
 
   if (!isValidPassword(password)) {
-    throw validationError('Password must be at least 8 characters.');
+    throw validationError(
+      'Password must be at least 12 characters and include uppercase, lowercase, number, and symbol.'
+    );
   }
 
   const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
 
   try {
-    const user = await usersRepository.createUser({ email, passwordHash });
-    return res.status(201).json({ user: formatUser(user) });
+    await usersRepository.createUser({ email, passwordHash });
   } catch (error) {
     if (error.code === '23505') {
-      throw new AppError(409, 'EMAIL_ALREADY_EXISTS', 'This email is already registered.');
+      return res.status(201).json({
+        message: 'If the account can be created, continue to login.'
+      });
     }
 
     throw error;
   }
+
+  return res.status(201).json({
+    message: 'If the account can be created, continue to login.'
+  });
 }));
 
 router.post('/login', asyncHandler(async (req, res) => {
@@ -82,6 +91,7 @@ router.post('/login', asyncHandler(async (req, res) => {
     },
     config.jwtSecret,
     {
+      jwtid: randomUUID(),
       subject: String(user.id),
       expiresIn: config.jwtExpiresIn
     }
@@ -95,8 +105,18 @@ router.post('/login', asyncHandler(async (req, res) => {
   });
 }));
 
-router.post('/logout', authenticate, (_req, res) => {
+router.post('/logout', authenticate, asyncHandler(async (req, res) => {
+  if (!req.auth?.jti || !req.auth?.expiresAt) {
+    throw unauthorized('Invalid authentication token.');
+  }
+
+  await revokedTokensRepository.revokeToken({
+    tokenJti: req.auth.jti,
+    userId: req.user.id,
+    expiresAt: req.auth.expiresAt
+  });
+
   return res.status(204).send();
-});
+}));
 
 module.exports = router;

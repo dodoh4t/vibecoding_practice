@@ -17,10 +17,10 @@ export type Todo = {
 
 export type ApiErrorCode =
   | 'VALIDATION_ERROR'
-  | 'EMAIL_ALREADY_EXISTS'
   | 'INVALID_CREDENTIALS'
   | 'UNAUTHORIZED'
   | 'TOKEN_EXPIRED'
+  | 'RATE_LIMITED'
   | 'TODO_NOT_FOUND'
   | 'INTERNAL_SERVER_ERROR';
 

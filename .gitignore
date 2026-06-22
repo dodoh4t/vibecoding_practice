@@ -1,0 +1,9 @@
+.env
+.env.*
+!.env.example
+.codex/
+node_modules/
+coverage/
+dist/
+.DS_Store
+npm-debug.log*

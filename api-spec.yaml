@@ -52,7 +52,7 @@ paths:
                   summary: Created user
                   value:
                     user:
-                      id: 7c4a8e2f-9d63-4ef2-8e22-67ef1cb12a54
+                      id: '1'
                       email: user@example.com
                       createdAt: '2026-06-22T05:40:00.000Z'
                       updatedAt: '2026-06-22T05:40:00.000Z'
@@ -127,7 +127,7 @@ paths:
                     tokenType: Bearer
                     expiresIn: 3600
                     user:
-                      id: 7c4a8e2f-9d63-4ef2-8e22-67ef1cb12a54
+                      id: '1'
                       email: user@example.com
                       createdAt: '2026-06-22T05:40:00.000Z'
                       updatedAt: '2026-06-22T05:40:00.000Z'
@@ -218,14 +218,14 @@ paths:
                   summary: Todo list
                   value:
                     todos:
-                      - id: 2a7b0a67-e8f5-43d5-a26d-d1c9359ad4ef
-                        userId: 7c4a8e2f-9d63-4ef2-8e22-67ef1cb12a54
+                      - id: '1'
+                        userId: '1'
                         content: Write PRD
                         isCompleted: false
                         createdAt: '2026-06-22T05:45:00.000Z'
                         updatedAt: '2026-06-22T05:45:00.000Z'
-                      - id: 96d66985-516c-4d2d-bd09-68d2d0711d15
-                        userId: 7c4a8e2f-9d63-4ef2-8e22-67ef1cb12a54
+                      - id: '2'
+                        userId: '1'
                         content: Review ERD
                         isCompleted: true
                         createdAt: '2026-06-22T05:50:00.000Z'
@@ -285,8 +285,8 @@ paths:
                   summary: Created Todo
                   value:
                     todo:
-                      id: 2a7b0a67-e8f5-43d5-a26d-d1c9359ad4ef
-                      userId: 7c4a8e2f-9d63-4ef2-8e22-67ef1cb12a54
+                      id: '1'
+                      userId: '1'
                       content: Buy groceries
                       isCompleted: false
                       createdAt: '2026-06-22T05:45:00.000Z'
@@ -348,8 +348,8 @@ paths:
                   summary: Updated Todo
                   value:
                     todo:
-                      id: 2a7b0a67-e8f5-43d5-a26d-d1c9359ad4ef
-                      userId: 7c4a8e2f-9d63-4ef2-8e22-67ef1cb12a54
+                      id: '1'
+                      userId: '1'
                       content: Buy groceries
                       isCompleted: true
                       createdAt: '2026-06-22T05:45:00.000Z'
@@ -372,7 +372,7 @@ paths:
                   value:
                     error:
                       code: VALIDATION_ERROR
-                      message: todoId must be a valid UUID.
+                      message: todoId must be a valid positive integer.
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
@@ -405,7 +405,7 @@ paths:
                   value:
                     error:
                       code: VALIDATION_ERROR
-                      message: todoId must be a valid UUID.
+                      message: todoId must be a valid positive integer.
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
@@ -427,11 +427,11 @@ components:
       name: todoId
       in: path
       required: true
-      description: Todo ID. The Todo must belong to the authenticated user.
+      description: Positive integer Todo ID. The Todo must belong to the authenticated user.
       schema:
         type: string
-        format: uuid
-      example: 2a7b0a67-e8f5-43d5-a26d-d1c9359ad4ef
+        pattern: '^[1-9]\d*$'
+      example: '1'
 
   responses:
     Unauthorized:
@@ -494,9 +494,9 @@ components:
       properties:
         id:
           type: string
-          format: uuid
-          description: User primary key.
-          example: 7c4a8e2f-9d63-4ef2-8e22-67ef1cb12a54
+          pattern: '^[1-9]\d*$'
+          description: User primary key returned as a string from the BIGSERIAL database ID.
+          example: '1'
         email:
           type: string
           format: email
@@ -528,16 +528,16 @@ components:
       properties:
         id:
           type: string
-          format: uuid
-          description: Todo primary key.
-          example: 2a7b0a67-e8f5-43d5-a26d-d1c9359ad4ef
+          pattern: '^[1-9]\d*$'
+          description: Todo primary key returned as a string from the BIGSERIAL database ID.
+          example: '1'
         userId:
           type: string
-          format: uuid
+          pattern: '^[1-9]\d*$'
           description: >
             Owner user ID mapped from todos.user_id. It is included so clients can
             correlate Todo ownership with the authenticated user when needed.
-          example: 7c4a8e2f-9d63-4ef2-8e22-67ef1cb12a54
+          example: '1'
         content:
           type: string
           minLength: 1

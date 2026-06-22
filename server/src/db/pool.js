@@ -1,5 +1,9 @@
-const { Pool } = require('pg');
+const { Pool, types } = require('pg');
 const { getConfig } = require('../config');
+
+const POSTGRES_DATE_OID = 1082;
+
+types.setTypeParser(POSTGRES_DATE_OID, (value) => value);
 
 let pool;
 

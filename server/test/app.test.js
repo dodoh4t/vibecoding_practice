@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const request = require('supertest');
 const bcrypt = require('bcrypt');
+const { types } = require('pg');
 const createApp = require('../src/app');
 const db = require('../src/db/pool');
 
@@ -160,6 +161,12 @@ test('OpenAPI docs are served', async () => {
   const docsResponse = await request(app).get('/api/docs/').expect(200);
   assert.match(docsResponse.text, /dodoTodoList API Docs/);
   assert.match(docsResponse.text, /swagger-ui/);
+});
+
+test('PostgreSQL DATE values are parsed without timezone conversion', () => {
+  const parseDate = types.getTypeParser(1082, 'text');
+
+  assert.equal(parseDate('2026-06-22'), '2026-06-22');
 });
 
 test('signup normalizes email and rejects duplicate accounts', async () => {

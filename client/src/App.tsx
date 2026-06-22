@@ -10,8 +10,12 @@ import {
 } from 'react';
 import {
   AlertCircle,
+  CalendarDays,
   Check,
+  ChevronLeft,
   ChevronDown,
+  ChevronRight,
+  List,
   ListTodo,
   LogOut,
   Plus,
@@ -34,6 +38,38 @@ function formatDate(value: string) {
     day: 'numeric',
     year: 'numeric',
   }).format(new Date(value));
+}
+
+function toDateOnly(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function addMonths(date: Date, amount: number) {
+  return new Date(date.getFullYear(), date.getMonth() + amount, 1);
+}
+
+function getMonthRange(date: Date) {
+  const first = new Date(date.getFullYear(), date.getMonth(), 1);
+  const last = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+  return {
+    from: toDateOnly(first),
+    to: toDateOnly(last),
+  };
+}
+
+function getCalendarCells(date: Date) {
+  const firstOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);
+  const start = new Date(firstOfMonth);
+  start.setDate(firstOfMonth.getDate() - firstOfMonth.getDay());
+
+  return Array.from({ length: 42 }, (_, index) => {
+    const cell = new Date(start);
+    cell.setDate(start.getDate() + index);
+    return cell;
+  });
 }
 
 type RoutePath = '/login' | '/signup' | '/todos';
@@ -295,14 +331,18 @@ function SignupPage() {
 
 type FilterValue = 'all' | 'active' | 'completed';
 type SortValue = 'createdAtDesc' | 'createdAtAsc';
+type ViewMode = 'list' | 'month';
 
 function TodoPage() {
   const auth = useAuth();
   const { navigate } = useRouterContext();
   const [todos, setTodos] = useState<Todo[]>([]);
   const [content, setContent] = useState('');
+  const [dueDate, setDueDate] = useState(() => toDateOnly(new Date()));
   const [filter, setFilter] = useState<FilterValue>('all');
   const [sort, setSort] = useState<SortValue>('createdAtDesc');
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const [visibleMonth, setVisibleMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const [isLoading, setIsLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
@@ -315,6 +355,16 @@ function TodoPage() {
   );
 
   const completedQuery = filter === 'all' ? undefined : String(filter === 'completed');
+  const monthRange = getMonthRange(visibleMonth);
+  const calendarCells = getCalendarCells(visibleMonth);
+  const monthTitle = new Intl.DateTimeFormat('en', { month: 'long', year: 'numeric' }).format(visibleMonth);
+  const todosByDate = useMemo(() => {
+    return todos.reduce<Record<string, Todo[]>>((groups, todo) => {
+      groups[todo.dueDate] = groups[todo.dueDate] || [];
+      groups[todo.dueDate].push(todo);
+      return groups;
+    }, {});
+  }, [todos]);
 
   const handleAuthFailure = useCallback((error: unknown) => {
     if (isAuthError(error)) {
@@ -334,7 +384,12 @@ function TodoPage() {
     setIsLoading(true);
     setGlobalError(null);
     try {
-      const response = await api.listTodos(auth.token, { completed: completedQuery, sort });
+      const response = await api.listTodos(auth.token, {
+        completed: completedQuery,
+        sort,
+        from: viewMode === 'month' ? monthRange.from : undefined,
+        to: viewMode === 'month' ? monthRange.to : undefined,
+      });
       setTodos(response.todos);
     } catch (caught) {
       if (!handleAuthFailure(caught)) {
@@ -343,7 +398,7 @@ function TodoPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [auth.token, completedQuery, handleAuthFailure, sort]);
+  }, [auth.token, completedQuery, handleAuthFailure, monthRange.from, monthRange.to, sort, viewMode]);
 
   useEffect(() => {
     void loadTodos();
@@ -362,15 +417,9 @@ function TodoPage() {
 
     setIsAdding(true);
     try {
-      const response = await api.createTodo(auth.token, trimmed);
+      await api.createTodo(auth.token, trimmed, dueDate);
       setContent('');
-      if (filter === 'completed') {
-        setFilter('all');
-      } else {
-        setTodos((current) => sort === 'createdAtAsc'
-          ? [...current, response.todo]
-          : [response.todo, ...current]);
-      }
+      await loadTodos();
     } catch (caught) {
       if (!handleAuthFailure(caught)) {
         setInputError(caught instanceof Error ? caught.message : 'Unable to add todo.');
@@ -446,7 +495,7 @@ function TodoPage() {
       <main className="mx-auto grid max-w-4xl gap-6 px-4 py-8 sm:px-6 lg:px-8">
         <section className="rounded-2xl border border-line bg-surface p-5 shadow-card sm:p-6">
           <h1 className="text-xl font-bold text-ink-900 sm:text-2xl">All todos</h1>
-          <form className="mt-5 grid gap-3 sm:grid-cols-[1fr_auto]" onSubmit={handleAddTodo}>
+          <form className="mt-5 grid gap-3 sm:grid-cols-[1fr_11rem_auto]" onSubmit={handleAddTodo}>
             <div>
               <label className="sr-only" htmlFor="todo-content">
                 Add a todo
@@ -462,6 +511,16 @@ function TodoPage() {
               />
               <FieldError id="todo-content-error" message={inputError} />
             </div>
+            <label className="grid gap-2 text-sm font-semibold text-ink-800 sm:w-44">
+              <span className="sr-only">Todo date</span>
+              <input
+                className="auth-input"
+                type="date"
+                value={dueDate}
+                onChange={(event) => setDueDate(event.target.value)}
+                disabled={isAdding}
+              />
+            </label>
             <button className="primary-button w-full sm:w-auto" type="submit" disabled={isAdding}>
               <Plus aria-hidden="true" size={18} />
               {isAdding ? 'Adding...' : 'Add'}
@@ -470,12 +529,37 @@ function TodoPage() {
         </section>
 
         <section className="rounded-2xl border border-line bg-surface p-5 shadow-card sm:p-6">
-          <div className="grid gap-4 md:grid-cols-[1fr_auto_auto] md:items-end">
+          <div className="grid gap-4 lg:grid-cols-[1fr_auto_auto_auto] lg:items-end">
             <div>
               <p className="text-sm font-semibold text-ink-500">Summary</p>
               <p className="mt-1 text-base font-bold text-ink-900">
                 {todos.length} total / {completedCount} completed
               </p>
+            </div>
+            <div className="grid gap-2 text-sm font-semibold text-ink-800">
+              View
+              <div className="grid grid-cols-2 rounded-ui border border-line bg-slate-50 p-1">
+                <button
+                  className={`inline-flex h-9 items-center justify-center gap-2 rounded-md px-3 text-sm font-semibold transition-colors ${
+                    viewMode === 'list' ? 'bg-surface text-brand-600 shadow-card' : 'text-ink-500 hover:text-ink-700'
+                  }`}
+                  type="button"
+                  onClick={() => setViewMode('list')}
+                >
+                  <List aria-hidden="true" size={15} />
+                  List
+                </button>
+                <button
+                  className={`inline-flex h-9 items-center justify-center gap-2 rounded-md px-3 text-sm font-semibold transition-colors ${
+                    viewMode === 'month' ? 'bg-surface text-brand-600 shadow-card' : 'text-ink-500 hover:text-ink-700'
+                  }`}
+                  type="button"
+                  onClick={() => setViewMode('month')}
+                >
+                  <CalendarDays aria-hidden="true" size={15} />
+                  Month
+                </button>
+              </div>
             </div>
             <label className="grid gap-2 text-sm font-semibold text-ink-800">
               Show
@@ -520,6 +604,16 @@ function TodoPage() {
               <div className="rounded-ui border border-dashed border-line bg-slate-50 p-8 text-center text-sm font-medium text-ink-500">
                 Loading todos...
               </div>
+            ) : viewMode === 'month' ? (
+              <CalendarMonth
+                cells={calendarCells}
+                monthDate={visibleMonth}
+                monthTitle={monthTitle}
+                todosByDate={todosByDate}
+                onPrevious={() => setVisibleMonth((current) => addMonths(current, -1))}
+                onNext={() => setVisibleMonth((current) => addMonths(current, 1))}
+                onToday={() => setVisibleMonth(new Date(new Date().getFullYear(), new Date().getMonth(), 1))}
+              />
             ) : todos.length === 0 ? (
               <div className="rounded-ui border border-dashed border-line bg-slate-50 p-8 text-center">
                 <p className="text-base font-bold text-ink-900">No todos yet.</p>
@@ -574,6 +668,99 @@ function TodoPage() {
           </div>
         </section>
       </main>
+    </div>
+  );
+}
+
+function CalendarMonth({
+  cells,
+  monthDate,
+  monthTitle,
+  todosByDate,
+  onPrevious,
+  onNext,
+  onToday,
+}: {
+  cells: Date[];
+  monthDate: Date;
+  monthTitle: string;
+  todosByDate: Record<string, Todo[]>;
+  onPrevious: () => void;
+  onNext: () => void;
+  onToday: () => void;
+}) {
+  const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const today = toDateOnly(new Date());
+
+  return (
+    <div className="grid gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="text-lg font-bold text-ink-900">{monthTitle}</h2>
+        <div className="flex items-center gap-2">
+          <button className="secondary-button h-9 px-3" type="button" onClick={onPrevious} aria-label="Previous month">
+            <ChevronLeft aria-hidden="true" size={16} />
+          </button>
+          <button className="secondary-button h-9 px-3" type="button" onClick={onToday}>
+            Today
+          </button>
+          <button className="secondary-button h-9 px-3" type="button" onClick={onNext} aria-label="Next month">
+            <ChevronRight aria-hidden="true" size={16} />
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-7 overflow-hidden rounded-ui border border-line bg-surface">
+        {weekdays.map((day) => (
+          <div className="border-b border-line bg-slate-50 px-2 py-2 text-center text-xs font-bold text-ink-500" key={day}>
+            {day}
+          </div>
+        ))}
+        {cells.map((cell) => {
+          const dateKey = toDateOnly(cell);
+          const dayTodos = todosByDate[dateKey] || [];
+          const isCurrentMonth = cell.getMonth() === monthDate.getMonth();
+          const isToday = dateKey === today;
+
+          return (
+            <div
+              className={`min-h-28 border-b border-r border-line p-2 last:border-r-0 ${
+                isCurrentMonth ? 'bg-surface' : 'bg-slate-50/70'
+              }`}
+              key={dateKey}
+            >
+              <div
+                className={`mb-2 flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
+                  isToday
+                    ? 'bg-brand-600 text-white'
+                    : isCurrentMonth
+                      ? 'text-ink-800'
+                      : 'text-ink-300'
+                }`}
+              >
+                {cell.getDate()}
+              </div>
+              <div className="grid gap-1">
+                {dayTodos.slice(0, 3).map((todo) => (
+                  <div
+                    className={`truncate rounded-md px-2 py-1 text-xs font-semibold ${
+                      todo.isCompleted
+                        ? 'bg-slate-100 text-ink-500 line-through'
+                        : 'bg-brand-50 text-brand-700'
+                    }`}
+                    key={todo.id}
+                    title={todo.content}
+                  >
+                    {todo.content}
+                  </div>
+                ))}
+                {dayTodos.length > 3 ? (
+                  <p className="px-2 text-xs font-semibold text-ink-500">+{dayTodos.length - 3} more</p>
+                ) : null}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

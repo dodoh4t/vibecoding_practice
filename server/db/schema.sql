@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS public.todos (
     is_completed BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    due_date DATE NOT NULL DEFAULT CURRENT_DATE,
     CONSTRAINT todos_user_id_fkey
         FOREIGN KEY (user_id)
         REFERENCES public.users(id)
@@ -33,6 +34,9 @@ CREATE INDEX IF NOT EXISTS todos_user_id_created_at_idx
 
 CREATE INDEX IF NOT EXISTS todos_user_id_is_completed_idx
     ON public.todos (user_id, is_completed);
+
+CREATE INDEX IF NOT EXISTS todos_user_id_due_date_idx
+    ON public.todos (user_id, due_date);
 
 CREATE INDEX IF NOT EXISTS todos_created_at_idx
     ON public.todos (created_at DESC);

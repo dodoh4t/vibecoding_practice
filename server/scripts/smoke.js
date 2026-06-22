@@ -78,7 +78,10 @@ async function main() {
     const created = await requestJson(baseUrl, '/todos', {
       method: 'POST',
       headers: { Authorization: `Bearer ${firstToken}` },
-      body: JSON.stringify({ content: 'Smoke test todo' })
+      body: JSON.stringify({
+        content: 'Smoke test todo',
+        dueDate: new Date().toISOString().slice(0, 10)
+      })
     });
     const todoId = created.body.todo.id;
 

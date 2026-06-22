@@ -4,7 +4,7 @@ const authenticate = require('../middleware/authenticate');
 const todosRepository = require('../repositories/todosRepository');
 const { validationError, todoNotFound } = require('../errors');
 const { formatTodo } = require('../utils/formatters');
-const { isPositiveIntegerId, parseBooleanQuery } = require('../utils/validators');
+const { isPositiveIntegerId, parseBooleanQuery, isValidDateOnly } = require('../utils/validators');
 
 const router = express.Router();
 
@@ -13,6 +13,7 @@ router.use(authenticate);
 router.get('/', asyncHandler(async (req, res) => {
   const completed = parseBooleanQuery(req.query.completed);
   const sort = req.query.sort || 'createdAtDesc';
+  const { from, to } = req.query;
 
   if (completed === null) {
     throw validationError('completed must be a boolean value.');
@@ -22,10 +23,20 @@ router.get('/', asyncHandler(async (req, res) => {
     throw validationError('sort must be one of createdAtDesc or createdAtAsc.');
   }
 
+  if (from !== undefined && !isValidDateOnly(from)) {
+    throw validationError('from must be a date in YYYY-MM-DD format.');
+  }
+
+  if (to !== undefined && !isValidDateOnly(to)) {
+    throw validationError('to must be a date in YYYY-MM-DD format.');
+  }
+
   const todos = await todosRepository.listTodos({
     userId: req.user.id,
     completed,
-    sort
+    sort,
+    from,
+    to
   });
 
   return res.status(200).json({
@@ -42,9 +53,18 @@ router.post('/', asyncHandler(async (req, res) => {
     throw validationError('Todo content must not be empty.');
   }
 
+  const dueDate = typeof req.body.dueDate === 'string'
+    ? req.body.dueDate
+    : new Date().toISOString().slice(0, 10);
+
+  if (!isValidDateOnly(dueDate)) {
+    throw validationError('dueDate must be a date in YYYY-MM-DD format.');
+  }
+
   const todo = await todosRepository.createTodo({
     userId: req.user.id,
-    content
+    content,
+    dueDate
   });
 
   return res.status(201).json({ todo: formatTodo(todo) });

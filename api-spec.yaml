@@ -199,13 +199,27 @@ paths:
         - name: sort
           in: query
           required: false
-          description: Sort order by creation time.
+          description: Sort order by Todo date and creation time.
           schema:
             type: string
             enum:
               - createdAtDesc
               - createdAtAsc
             default: createdAtDesc
+        - name: from
+          in: query
+          required: false
+          description: Start due date filter in YYYY-MM-DD format.
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: false
+          description: End due date filter in YYYY-MM-DD format.
+          schema:
+            type: string
+            format: date
       responses:
         '200':
           description: Todo list returned successfully
@@ -222,12 +236,14 @@ paths:
                         userId: '1'
                         content: Write PRD
                         isCompleted: false
+                        dueDate: '2026-06-22'
                         createdAt: '2026-06-22T05:45:00.000Z'
                         updatedAt: '2026-06-22T05:45:00.000Z'
                       - id: '2'
                         userId: '1'
                         content: Review ERD
                         isCompleted: true
+                        dueDate: '2026-06-22'
                         createdAt: '2026-06-22T05:50:00.000Z'
                         updatedAt: '2026-06-22T06:10:00.000Z'
         '400':
@@ -273,6 +289,7 @@ paths:
                 summary: Valid create request
                 value:
                   content: Buy groceries
+                  dueDate: '2026-06-22'
       responses:
         '201':
           description: Todo created successfully
@@ -289,6 +306,7 @@ paths:
                       userId: '1'
                       content: Buy groceries
                       isCompleted: false
+                      dueDate: '2026-06-22'
                       createdAt: '2026-06-22T05:45:00.000Z'
                       updatedAt: '2026-06-22T05:45:00.000Z'
         '400':
@@ -352,6 +370,7 @@ paths:
                       userId: '1'
                       content: Buy groceries
                       isCompleted: true
+                      dueDate: '2026-06-22'
                       createdAt: '2026-06-22T05:45:00.000Z'
                       updatedAt: '2026-06-22T06:00:00.000Z'
         '400':
@@ -523,6 +542,7 @@ components:
         - userId
         - content
         - isCompleted
+        - dueDate
         - createdAt
         - updatedAt
       properties:
@@ -548,6 +568,11 @@ components:
           type: boolean
           description: Completion status mapped from todos.is_completed.
           example: false
+        dueDate:
+          type: string
+          format: date
+          description: Todo target date mapped from todos.due_date.
+          example: '2026-06-22'
         createdAt:
           type: string
           format: date-time
@@ -606,6 +631,11 @@ components:
           pattern: '.*\S.*'
           description: Todo content. Whitespace-only values are rejected.
           example: Buy groceries
+        dueDate:
+          type: string
+          format: date
+          description: Target date for displaying the Todo in the monthly calendar.
+          example: '2026-06-22'
 
     UpdateTodoRequest:
       type: object

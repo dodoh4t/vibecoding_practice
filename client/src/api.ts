@@ -71,20 +71,30 @@ export const api = {
       token,
     });
   },
-  listTodos(token: string, params: { completed?: string; sort: 'createdAtDesc' | 'createdAtAsc' }) {
+  listTodos(
+    token: string,
+    params: {
+      completed?: string;
+      sort: 'createdAtDesc' | 'createdAtAsc';
+      from?: string;
+      to?: string;
+    },
+  ) {
     return request<{ todos: Todo[] }>('/todos', {
       token,
       query: {
         completed: params.completed,
         sort: params.sort,
+        from: params.from,
+        to: params.to,
       },
     });
   },
-  createTodo(token: string, content: string) {
+  createTodo(token: string, content: string, dueDate: string) {
     return request<{ todo: Todo }>('/todos', {
       method: 'POST',
       token,
-      body: { content },
+      body: { content, dueDate },
     });
   },
   updateTodo(token: string, todoId: string, isCompleted: boolean) {

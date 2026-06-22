@@ -10,6 +10,7 @@ export type Todo = {
   userId: string;
   content: string;
   isCompleted: boolean;
+  dueDate: string;
   createdAt: string;
   updatedAt: string;
 };

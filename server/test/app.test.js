@@ -25,6 +25,7 @@ function createRow(overrides = {}) {
   return {
     created_at: now,
     updated_at: now,
+    due_date: '2026-06-22',
     ...overrides
   };
 }
@@ -69,11 +70,12 @@ function installMockDb() {
     }
 
     if (normalized.startsWith('INSERT INTO public.todos')) {
-      const [userId, content] = params;
+      const [userId, content, dueDate] = params;
       const todo = createRow({
         id: state.nextTodoId++,
         user_id: Number(userId),
         content,
+        due_date: dueDate,
         is_completed: false
       });
       state.todos.push(todo);
@@ -210,7 +212,8 @@ test('todo APIs require auth and enforce owner-scoped updates', async () => {
     .send({ content: '  Write backend  ' })
     .expect(201);
 
-  assert.equal(createResponse.body.todo.content, 'Write backend');
+    assert.equal(createResponse.body.todo.content, 'Write backend');
+    assert.equal(createResponse.body.todo.dueDate, '2026-06-22');
 
   const listResponse = await request(app)
     .get('/api/todos?sort=createdAtDesc')
@@ -252,7 +255,7 @@ test('todo validation returns API error format', async () => {
   const blank = await request(app)
     .post('/api/todos')
     .set('Authorization', `Bearer ${token}`)
-    .send({ content: '   ' })
+    .send({ content: '   ', dueDate: '2026-06-22' })
     .expect(400);
 
   assert.equal(blank.body.error.code, 'VALIDATION_ERROR');
@@ -263,4 +266,12 @@ test('todo validation returns API error format', async () => {
     .expect(400);
 
   assert.equal(invalidSort.body.error.code, 'VALIDATION_ERROR');
+
+  const invalidDate = await request(app)
+    .post('/api/todos')
+    .set('Authorization', `Bearer ${token}`)
+    .send({ content: 'Date test', dueDate: '2026-13-40' })
+    .expect(400);
+
+  assert.equal(invalidDate.body.error.code, 'VALIDATION_ERROR');
 });

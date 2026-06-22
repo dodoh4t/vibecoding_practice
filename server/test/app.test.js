@@ -151,6 +151,17 @@ test('health endpoint returns ok', async () => {
   assert.deepEqual(response.body, { status: 'ok' });
 });
 
+test('OpenAPI docs are served', async () => {
+  const app = createApp({ config });
+
+  const specResponse = await request(app).get('/api/openapi.yaml').expect(200);
+  assert.match(specResponse.text, /openapi: 3\.0\.0/);
+
+  const docsResponse = await request(app).get('/api/docs/').expect(200);
+  assert.match(docsResponse.text, /dodoTodoList API Docs/);
+  assert.match(docsResponse.text, /swagger-ui/);
+});
+
 test('signup normalizes email and rejects duplicate accounts', async () => {
   installMockDb();
   const app = createApp({ config });

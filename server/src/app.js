@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const authRoutes = require('./routes/authRoutes');
 const todoRoutes = require('./routes/todoRoutes');
+const { docsRoutes, openApiYamlHandler } = require('./routes/docsRoutes');
 const { getConfig } = require('./config');
 const { sendError } = require('./errors');
 
@@ -33,6 +34,8 @@ function createApp(options = {}) {
     res.status(200).json({ status: 'ok' });
   });
 
+  app.get('/api/openapi.yaml', openApiYamlHandler);
+  app.use(...docsRoutes());
   app.use('/api/auth', authRoutes);
   app.use('/api/todos', todoRoutes);
 

@@ -1,0 +1,697 @@
+openapi: 3.0.0
+info:
+  title: dodoTodoList API
+  version: 1.0.0
+  description: >
+    dodoTodoList is a personal TodoList API with backend-managed JWT authentication
+    and Supabase PostgreSQL storage. Supabase Auth is not used. API request and
+    response fields use camelCase and are mapped from snake_case database columns.
+servers:
+  - url: http://localhost:3000/api
+    description: Local development server
+  - url: https://dodotodolist.example.com/api
+    description: Production server
+
+tags:
+  - name: Auth
+    description: User signup and login APIs
+  - name: Todos
+    description: Authenticated personal Todo APIs
+
+paths:
+  /auth/signup:
+    post:
+      tags:
+        - Auth
+      summary: Create a new user account
+      description: >
+        Creates a user account with a unique lowercase email and hashed password.
+        The password is accepted as plaintext only in the request and must never be stored as plaintext.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignupRequest'
+            examples:
+              valid:
+                summary: Valid signup request
+                value:
+                  email: user@example.com
+                  password: securepass123
+      responses:
+        '201':
+          description: User account created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthUserResponse'
+              examples:
+                created:
+                  summary: Created user
+                  value:
+                    user:
+                      id: 7c4a8e2f-9d63-4ef2-8e22-67ef1cb12a54
+                      email: user@example.com
+                      createdAt: '2026-06-22T05:40:00.000Z'
+                      updatedAt: '2026-06-22T05:40:00.000Z'
+        '400':
+          description: Invalid signup input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalidEmail:
+                  summary: Invalid email
+                  value:
+                    error:
+                      code: VALIDATION_ERROR
+                      message: Enter a valid email address.
+                shortPassword:
+                  summary: Password too short
+                  value:
+                    error:
+                      code: VALIDATION_ERROR
+                      message: Password must be at least 8 characters.
+        '409':
+          description: Email is already registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                duplicateEmail:
+                  summary: Duplicate email
+                  value:
+                    error:
+                      code: EMAIL_ALREADY_EXISTS
+                      message: This email is already registered.
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auth/login:
+    post:
+      tags:
+        - Auth
+      summary: Login and receive a JWT
+      description: >
+        Authenticates a user with email and password. On success, the API returns
+        a backend-signed JWT that must be sent as a Bearer token to Todo endpoints.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            examples:
+              valid:
+                summary: Valid login request
+                value:
+                  email: user@example.com
+                  password: securepass123
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+              examples:
+                success:
+                  summary: JWT issued
+                  value:
+                    accessToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.example.signature
+                    tokenType: Bearer
+                    expiresIn: 3600
+                    user:
+                      id: 7c4a8e2f-9d63-4ef2-8e22-67ef1cb12a54
+                      email: user@example.com
+                      createdAt: '2026-06-22T05:40:00.000Z'
+                      updatedAt: '2026-06-22T05:40:00.000Z'
+        '400':
+          description: Invalid login input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missingPassword:
+                  summary: Missing password
+                  value:
+                    error:
+                      code: VALIDATION_ERROR
+                      message: Email and password are required.
+        '401':
+          description: Email or password is incorrect
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalidCredentials:
+                  summary: Invalid credentials
+                  value:
+                    error:
+                      code: INVALID_CREDENTIALS
+                      message: Email or password is incorrect.
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auth/logout:
+    post:
+      tags:
+        - Auth
+      summary: Logout the current user
+      description: >
+        Completes the logout flow for a stateless JWT MVP. The server does not
+        revoke a persisted session because the ERD intentionally has no sessions
+        table. The client must remove the stored JWT after this request succeeds.
+      security:
+        - bearerAuth: []
+      responses:
+        '204':
+          description: Logout accepted. No response body is returned.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /todos:
+    get:
+      tags:
+        - Todos
+      summary: List current user's todos
+      description: >
+        Returns all Todo items owned by the authenticated user. The backend must
+        scope the query by the user ID from the validated JWT.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: completed
+          in: query
+          required: false
+          description: Optional completion status filter.
+          schema:
+            type: boolean
+        - name: sort
+          in: query
+          required: false
+          description: Sort order by creation time.
+          schema:
+            type: string
+            enum:
+              - createdAtDesc
+              - createdAtAsc
+            default: createdAtDesc
+      responses:
+        '200':
+          description: Todo list returned successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TodoListResponse'
+              examples:
+                success:
+                  summary: Todo list
+                  value:
+                    todos:
+                      - id: 2a7b0a67-e8f5-43d5-a26d-d1c9359ad4ef
+                        userId: 7c4a8e2f-9d63-4ef2-8e22-67ef1cb12a54
+                        content: Write PRD
+                        isCompleted: false
+                        createdAt: '2026-06-22T05:45:00.000Z'
+                        updatedAt: '2026-06-22T05:45:00.000Z'
+                      - id: 96d66985-516c-4d2d-bd09-68d2d0711d15
+                        userId: 7c4a8e2f-9d63-4ef2-8e22-67ef1cb12a54
+                        content: Review ERD
+                        isCompleted: true
+                        createdAt: '2026-06-22T05:50:00.000Z'
+                        updatedAt: '2026-06-22T06:10:00.000Z'
+        '400':
+          description: Invalid query parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalidSort:
+                  summary: Invalid sort value
+                  value:
+                    error:
+                      code: VALIDATION_ERROR
+                      message: sort must be one of createdAtDesc or createdAtAsc.
+                invalidCompleted:
+                  summary: Invalid completed filter
+                  value:
+                    error:
+                      code: VALIDATION_ERROR
+                      message: completed must be a boolean value.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      tags:
+        - Todos
+      summary: Create a todo
+      description: >
+        Creates a new Todo for the authenticated user. Empty or whitespace-only
+        content is rejected. New Todo items are created with isCompleted=false.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTodoRequest'
+            examples:
+              valid:
+                summary: Valid create request
+                value:
+                  content: Buy groceries
+      responses:
+        '201':
+          description: Todo created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TodoResponse'
+              examples:
+                created:
+                  summary: Created Todo
+                  value:
+                    todo:
+                      id: 2a7b0a67-e8f5-43d5-a26d-d1c9359ad4ef
+                      userId: 7c4a8e2f-9d63-4ef2-8e22-67ef1cb12a54
+                      content: Buy groceries
+                      isCompleted: false
+                      createdAt: '2026-06-22T05:45:00.000Z'
+                      updatedAt: '2026-06-22T05:45:00.000Z'
+        '400':
+          description: Invalid Todo input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                blankContent:
+                  summary: Blank content
+                  value:
+                    error:
+                      code: VALIDATION_ERROR
+                      message: Todo content must not be empty.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /todos/{todoId}:
+    patch:
+      tags:
+        - Todos
+      summary: Update a todo completion status
+      description: >
+        Updates the completion status of one Todo owned by the authenticated user.
+        The backend must update only rows matching both todoId and the authenticated user ID.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TodoIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTodoRequest'
+            examples:
+              markComplete:
+                summary: Mark complete
+                value:
+                  isCompleted: true
+              markIncomplete:
+                summary: Mark incomplete
+                value:
+                  isCompleted: false
+      responses:
+        '200':
+          description: Todo updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TodoResponse'
+              examples:
+                updated:
+                  summary: Updated Todo
+                  value:
+                    todo:
+                      id: 2a7b0a67-e8f5-43d5-a26d-d1c9359ad4ef
+                      userId: 7c4a8e2f-9d63-4ef2-8e22-67ef1cb12a54
+                      content: Buy groceries
+                      isCompleted: true
+                      createdAt: '2026-06-22T05:45:00.000Z'
+                      updatedAt: '2026-06-22T06:00:00.000Z'
+        '400':
+          description: Invalid update input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missingStatus:
+                  summary: Missing isCompleted
+                  value:
+                    error:
+                      code: VALIDATION_ERROR
+                      message: isCompleted is required.
+                invalidTodoId:
+                  summary: Invalid Todo ID
+                  value:
+                    error:
+                      code: VALIDATION_ERROR
+                      message: todoId must be a valid UUID.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/TodoNotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      tags:
+        - Todos
+      summary: Delete a todo
+      description: >
+        Deletes one Todo owned by the authenticated user. Deleting another user's
+        Todo must not be possible; non-owned or missing Todo IDs return 404.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TodoIdPath'
+      responses:
+        '204':
+          description: Todo deleted successfully. No response body is returned.
+        '400':
+          description: Invalid Todo ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalidTodoId:
+                  summary: Invalid Todo ID
+                  value:
+                    error:
+                      code: VALIDATION_ERROR
+                      message: todoId must be a valid UUID.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/TodoNotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >
+        JWT issued by the login endpoint. Send as `Authorization: Bearer <token>`.
+
+  parameters:
+    TodoIdPath:
+      name: todoId
+      in: path
+      required: true
+      description: Todo ID. The Todo must belong to the authenticated user.
+      schema:
+        type: string
+        format: uuid
+      example: 2a7b0a67-e8f5-43d5-a26d-d1c9359ad4ef
+
+  responses:
+    Unauthorized:
+      description: Missing, expired, malformed, or invalid JWT
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            missingToken:
+              summary: Missing token
+              value:
+                error:
+                  code: UNAUTHORIZED
+                  message: Authentication is required.
+            expiredToken:
+              summary: Expired token
+              value:
+                error:
+                  code: TOKEN_EXPIRED
+                  message: Your session has expired. Please log in again.
+    TodoNotFound:
+      description: Todo does not exist or does not belong to the authenticated user
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            notFound:
+              summary: Todo not found
+              value:
+                error:
+                  code: TODO_NOT_FOUND
+                  message: Todo was not found.
+    InternalServerError:
+      description: Unexpected server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            unexpected:
+              summary: Unexpected error
+              value:
+                error:
+                  code: INTERNAL_SERVER_ERROR
+                  message: An unexpected error occurred.
+
+  schemas:
+    User:
+      type: object
+      description: >
+        Public user data derived from the users table. API fields use camelCase;
+        database columns use snake_case. password_hash is never returned.
+      required:
+        - id
+        - email
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: User primary key.
+          example: 7c4a8e2f-9d63-4ef2-8e22-67ef1cb12a54
+        email:
+          type: string
+          format: email
+          description: Lowercase normalized unique email address.
+          example: user@example.com
+        createdAt:
+          type: string
+          format: date-time
+          description: User creation timestamp mapped from users.created_at.
+          example: '2026-06-22T05:40:00.000Z'
+        updatedAt:
+          type: string
+          format: date-time
+          description: User last update timestamp mapped from users.updated_at.
+          example: '2026-06-22T05:40:00.000Z'
+
+    Todo:
+      type: object
+      description: >
+        Todo data derived from the todos table. API fields use camelCase;
+        database columns use snake_case.
+      required:
+        - id
+        - userId
+        - content
+        - isCompleted
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Todo primary key.
+          example: 2a7b0a67-e8f5-43d5-a26d-d1c9359ad4ef
+        userId:
+          type: string
+          format: uuid
+          description: >
+            Owner user ID mapped from todos.user_id. It is included so clients can
+            correlate Todo ownership with the authenticated user when needed.
+          example: 7c4a8e2f-9d63-4ef2-8e22-67ef1cb12a54
+        content:
+          type: string
+          minLength: 1
+          pattern: '.*\S.*'
+          description: Non-blank Todo content after trimming whitespace.
+          example: Buy groceries
+        isCompleted:
+          type: boolean
+          description: Completion status mapped from todos.is_completed.
+          example: false
+        createdAt:
+          type: string
+          format: date-time
+          description: Todo creation timestamp mapped from todos.created_at.
+          example: '2026-06-22T05:45:00.000Z'
+        updatedAt:
+          type: string
+          format: date-time
+          description: Todo last update timestamp mapped from todos.updated_at.
+          example: '2026-06-22T05:45:00.000Z'
+
+    SignupRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          description: Email address. The backend normalizes it to lowercase before saving.
+          example: user@example.com
+        password:
+          type: string
+          format: password
+          minLength: 8
+          description: Plaintext password sent over HTTPS. It is hashed before storage.
+          example: securepass123
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          description: Registered email address.
+          example: user@example.com
+        password:
+          type: string
+          format: password
+          minLength: 1
+          description: Account password.
+          example: securepass123
+
+    CreateTodoRequest:
+      type: object
+      required:
+        - content
+      properties:
+        content:
+          type: string
+          minLength: 1
+          pattern: '.*\S.*'
+          description: Todo content. Whitespace-only values are rejected.
+          example: Buy groceries
+
+    UpdateTodoRequest:
+      type: object
+      required:
+        - isCompleted
+      properties:
+        isCompleted:
+          type: boolean
+          description: New completion status.
+          example: true
+
+    AuthUserResponse:
+      type: object
+      required:
+        - user
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+
+    LoginResponse:
+      type: object
+      required:
+        - accessToken
+        - tokenType
+        - expiresIn
+        - user
+      properties:
+        accessToken:
+          type: string
+          description: Backend-signed JWT.
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.example.signature
+        tokenType:
+          type: string
+          enum:
+            - Bearer
+          example: Bearer
+        expiresIn:
+          type: integer
+          format: int32
+          description: Token lifetime in seconds.
+          example: 3600
+        user:
+          $ref: '#/components/schemas/User'
+
+    TodoResponse:
+      type: object
+      required:
+        - todo
+      properties:
+        todo:
+          $ref: '#/components/schemas/Todo'
+
+    TodoListResponse:
+      type: object
+      required:
+        - todos
+      properties:
+        todos:
+          type: array
+          items:
+            $ref: '#/components/schemas/Todo'
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              enum:
+                - VALIDATION_ERROR
+                - EMAIL_ALREADY_EXISTS
+                - INVALID_CREDENTIALS
+                - UNAUTHORIZED
+                - TOKEN_EXPIRED
+                - TODO_NOT_FOUND
+                - INTERNAL_SERVER_ERROR
+              description: Stable machine-readable error code.
+              example: VALIDATION_ERROR
+            message:
+              type: string
+              description: Human-readable error message.
+              example: Todo content must not be empty.
